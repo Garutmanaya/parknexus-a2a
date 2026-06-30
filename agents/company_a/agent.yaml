@@ -1,0 +1,56 @@
+agent_id: company_a
+display_name: Company A Parking
+description: Company A downtown parking provider agent.
+
+server:
+  host: 0.0.0.0
+  port: 8011
+  public_base_url: https://localhost:8011
+
+database:
+  db_name_env: COMPANY_A_DB_NAME
+  db_user_env: COMPANY_A_DB_USER
+  db_password_env: COMPANY_A_DB_PASSWORD
+
+garage:
+  name: Company A Downtown Garage
+  address: 100 Market Street
+  city: Fairfax
+  state: VA
+  postal_code: "22030"
+
+layout:
+  levels:
+    - name: GROUND
+      rows:
+        - label: A
+          columns: 20
+        - label: B
+          columns: 20
+
+    - name: LEVEL_1
+      rows:
+        - label: A
+          columns: 15
+
+pricing:
+  default_price_per_hour: 10.00
+  default_daily_rate: 30.00
+  default_monthly_rate: 250.00
+  by_level:
+    GROUND:
+      hourly_rate: 12.00
+      daily_rate: 35.00
+      monthly_rate: 275.00
+    LEVEL_1:
+      hourly_rate: 9.00
+      daily_rate: 28.00
+      monthly_rate: 225.00
+
+features:
+  ev_slots:
+    - GROUND:A:3
+    - GROUND:A:7
+  handicap_slots:
+    - GROUND:A:1
+    - GROUND:A:2

@@ -1,0 +1,51 @@
+agent_card:
+  name: company_b_parking_agent
+  version: 1.0.0
+  description: Company B parking availability and reservation agent.
+
+provider:
+  organization: Company B Parking
+  url: https://localhost:8012
+
+capabilities:
+  streaming: true
+  push_notifications: false
+  state_transition_history: true
+
+default_input_modes:
+  - text/plain
+  - application/json
+
+default_output_modes:
+  - application/json
+
+skills:
+  - id: search_slots
+    name: Search Parking Slots
+    description: Search available parking slots in Company B garages.
+    tags:
+      - parking
+      - search
+      - availability
+
+  - id: hold_slot
+    name: Hold Parking Slot
+    description: Temporarily hold a Company B parking slot.
+    tags:
+      - parking
+      - reservation
+      - hold
+
+  - id: confirm_reservation
+    name: Confirm Parking Reservation
+    description: Confirm a held Company B parking reservation.
+    tags:
+      - parking
+      - reservation
+
+  - id: release_slot
+    name: Release Parking Slot
+    description: Release a reserved or occupied Company B parking slot.
+    tags:
+      - parking
+      - release

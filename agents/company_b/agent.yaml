@@ -1,0 +1,69 @@
+agent_id: company_b
+display_name: Company B Parking
+description: Company B metro parking provider agent with a different garage layout.
+
+server:
+  host: 0.0.0.0
+  port: 8012
+  public_base_url: https://localhost:8012
+
+database:
+  db_name_env: COMPANY_B_DB_NAME
+  db_user_env: COMPANY_B_DB_USER
+  db_password_env: COMPANY_B_DB_PASSWORD
+
+garage:
+  name: Company B Metro Garage
+  address: 200 Metro Center Drive
+  city: Reston
+  state: VA
+  postal_code: "20190"
+
+layout:
+  levels:
+    - name: BASEMENT_1
+      rows:
+        - label: X
+          columns: 30
+        - label: Y
+          columns: 12
+
+    - name: ROOFTOP
+      rows:
+        - label: R
+          columns: 40
+
+    - name: VIP_LEVEL
+      rows:
+        - label: V
+          columns: 8
+
+pricing:
+  default_price_per_hour: 8.00
+  default_daily_rate: 24.00
+  default_monthly_rate: 200.00
+  by_level:
+    BASEMENT_1:
+      hourly_rate: 8.00
+      daily_rate: 22.00
+      monthly_rate: 190.00
+    ROOFTOP:
+      hourly_rate: 6.50
+      daily_rate: 18.00
+      monthly_rate: 160.00
+    VIP_LEVEL:
+      hourly_rate: 18.00
+      daily_rate: 60.00
+      monthly_rate: 500.00
+
+features:
+  ev_slots:
+    - BASEMENT_1:X:5
+    - BASEMENT_1:X:6
+    - ROOFTOP:R:10
+    - ROOFTOP:R:11
+
+  handicap_slots:
+    - BASEMENT_1:X:1
+    - BASEMENT_1:X:2
+    - VIP_LEVEL:V:1

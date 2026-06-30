@@ -1,0 +1,25 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: parknexus-postgres
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: ${POSTGRES_ADMIN_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_ADMIN_DB}
+
+    ports:
+      - "${POSTGRES_PORT}:5432"
+
+    volumes:
+      - parknexus_pgdata:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_ADMIN_USER} -d ${POSTGRES_ADMIN_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  parknexus_pgdata:

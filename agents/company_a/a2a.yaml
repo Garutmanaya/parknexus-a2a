@@ -1,0 +1,51 @@
+agent_card:
+  name: company_a_parking_agent
+  version: 1.0.0
+  description: Company A parking availability and reservation agent.
+
+provider:
+  organization: Company A Parking
+  url: https://localhost:8011
+
+capabilities:
+  streaming: true
+  push_notifications: false
+  state_transition_history: true
+
+default_input_modes:
+  - text/plain
+  - application/json
+
+default_output_modes:
+  - application/json
+
+skills:
+  - id: search_slots
+    name: Search Parking Slots
+    description: Search available parking slots using level, price, EV, and handicap filters.
+    tags:
+      - parking
+      - search
+      - availability
+
+  - id: hold_slot
+    name: Hold Parking Slot
+    description: Temporarily hold an available parking slot.
+    tags:
+      - parking
+      - reservation
+      - hold
+
+  - id: confirm_reservation
+    name: Confirm Parking Reservation
+    description: Confirm a held parking slot reservation.
+    tags:
+      - parking
+      - reservation
+
+  - id: release_slot
+    name: Release Parking Slot
+    description: Release a reserved or occupied parking slot.
+    tags:
+      - parking
+      - release
