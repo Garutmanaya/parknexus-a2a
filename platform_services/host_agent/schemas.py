@@ -79,6 +79,7 @@ class ReleaseSlotRequest(BaseModel):
 class GarageLayoutRequest(BaseModel):
     provider_url: str
 
+
 class ProviderSummary(BaseModel):
     name: str
     url: str
@@ -95,3 +96,80 @@ class ProvidersResponse(BaseModel):
 
 class GarageLayoutByProviderRequest(BaseModel):
     provider_agent: str
+
+
+class AdminLoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class AdminLoginResponse(BaseModel):
+    authenticated: bool
+    message: str
+
+
+class UserLoginRequest(BaseModel):
+    user_id: str
+    password: str
+
+
+class UserLoginResponse(BaseModel):
+    authenticated: bool
+    user: dict | None = None
+    message: str
+
+
+class CreateUserRequest(BaseModel):
+    user_id: str
+    password: str
+    email: str
+    display_name: str | None = None
+    first_name: str | None = None
+    last_name: str | None = None
+    phone_number: str | None = None
+    address: str | None = None
+
+
+class UpdateUserRequest(BaseModel):
+    user_id: str
+    password: str | None = None
+    email: str | None = None
+    display_name: str | None = None
+    first_name: str | None = None
+    last_name: str | None = None
+    phone_number: str | None = None
+    address: str | None = None
+    is_active: bool | None = None
+
+
+class UserStatusRequest(BaseModel):
+    user_id: str
+    is_active: bool
+
+
+class UserResponse(BaseModel):
+    user_id: str
+    display_name: str
+    first_name: str | None = None
+    last_name: str | None = None
+    email: str
+    phone_number: str | None = None
+    address: str | None = None
+    is_active: bool
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+class AgentsResponse(BaseModel):
+    count: int
+    agents: list[dict]
+
+
+class UsersResponse(BaseModel):
+    count: int
+    users: list[UserResponse]
+
+
+class TransactionsResponse(BaseModel):
+    count: int
+    transactions: list[dict]

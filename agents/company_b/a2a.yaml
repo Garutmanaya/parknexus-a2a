@@ -22,39 +22,101 @@ default_output_modes:
 skills:
   - id: search_slots
     name: Search Parking Slots
-    description: Search available parking slots in Company B garages.
-    tags:
-      - parking
-      - search
-      - availability
+    description: Search available parking slots using level, price, EV, and handicap filters.
+    tags: [parking, search, availability]
+    input_schema:
+      type: object
+      additionalProperties: false
+      properties:
+        level_name:
+          type: [string, "null"]
+          description: Provider level code, such as GROUND, LEVEL_1, ROOFTOP, BASEMENT_1.
+          x-canonical: level_name
+        slot_type:
+          type: [string, "null"]
+          x-canonical: slot_type
+        ev_charger:
+          type: [boolean, "null"]
+          x-canonical: ev_charger
+        handicap:
+          type: [boolean, "null"]
+          x-canonical: handicap
+        budget_amount:
+          type: [number, string, "null"]
+          x-canonical: budget_amount
+        budget_unit:
+          type: [string, "null"]
+          enum: [hour, day, month, total, unknown, null]
+          x-canonical: budget_unit
+        duration_minutes:
+          type: [integer, "null"]
+          x-canonical: duration_minutes
+        limit:
+          type: integer
+          x-canonical: limit
+      required: [limit]
+    output_schema:
+      type: object
+      properties:
+        count: {type: integer}
+        slots: {type: array}
 
   - id: hold_slot
     name: Hold Parking Slot
-    description: Temporarily hold a Company B parking slot.
-    tags:
-      - parking
-      - reservation
-      - hold
+    description: Temporarily hold an available parking slot.
+    tags: [parking, reservation, hold]
+    input_schema:
+      type: object
+      additionalProperties: false
+      properties:
+        slot_code: {type: string}
+        user_id: {type: string}
+        hold_minutes: {type: integer}
+      required: [slot_code, user_id]
 
   - id: confirm_reservation
     name: Confirm Parking Reservation
-    description: Confirm a held Company B parking reservation.
-    tags:
-      - parking
-      - reservation
+    description: Confirm a held parking slot reservation.
+    tags: [parking, reservation]
+    input_schema:
+      type: object
+      additionalProperties: false
+      properties:
+        hold_id: {type: string}
+        user_id: {type: string}
+        reserved_minutes: {type: integer}
+      required: [hold_id, user_id]
+
+  - id: cancel_hold
+    name: Cancel Hold
+    description: Cancel an active parking hold.
+    tags: [parking, reservation, cancel]
+    input_schema:
+      type: object
+      additionalProperties: false
+      properties:
+        hold_id: {type: string}
+        user_id: {type: string}
+      required: [hold_id, user_id]
 
   - id: release_slot
     name: Release Parking Slot
-    description: Release a reserved or occupied Company B parking slot.
-    tags:
-      - parking
-      - release
-
+    description: Release a reserved or occupied parking slot.
+    tags: [parking, release]
+    input_schema:
+      type: object
+      additionalProperties: false
+      properties:
+        slot_code: {type: string}
+        user_id: {type: string}
+        reason: {type: [string, "null"]}
+      required: [slot_code, user_id]
 
   - id: get_garage_layout
     name: Get Garage Layout
     description: Return visual garage layout including levels, rows, slots, statuses, and pricing.
-    tags:
-      - parking
-      - layout
-      - ui
+    tags: [parking, layout, ui]
+    input_schema:
+      type: object
+      additionalProperties: false
+      properties: {}

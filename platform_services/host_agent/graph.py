@@ -6,7 +6,7 @@ from decimal import Decimal
 from langgraph.graph import END, StateGraph
 
 from platform_services.host_agent.intent import ParkingIntent, parse_user_request
-from platform_services.host_agent.service import call_provider_search, discover_search_agents
+from platform_services.host_agent.service import discover_search_agents, find_parking
 from platform_services.host_agent.schemas import ProviderSlotResult
 from shared.logging.logger import get_logger
 
@@ -47,20 +47,17 @@ def discover_providers_node(state: HostAgentState) -> HostAgentState:
 def call_providers_node(state: HostAgentState) -> HostAgentState:
     logger.info("graph_node_started node=call_providers")
     intent = state["intent"]
-    all_slots: list[ProviderSlotResult] = []
-    for provider in state.get("providers", []):
-        all_slots.extend(call_provider_search(
-            provider=provider,
-            request_id=f"host-search-{provider['name']}",
-            level_name=intent.level_name,
-            ev_charger=intent.ev_charger,
-            handicap=intent.handicap,
-            budget_amount=intent.budget_amount,
-            budget_unit=intent.budget_unit.value if intent.budget_unit else None,
-            duration_minutes=intent.duration_minutes,
-            limit=5,
-        ))
-    state["slots"] = all_slots
+    # Uses Host service parallel search implementation. The explicit discover node remains
+    # in the graph for traceability, while the service owns concurrent A2A execution.
+    state["slots"] = find_parking(
+        level_name=intent.level_name,
+        ev_charger=intent.ev_charger,
+        handicap=intent.handicap,
+        budget_amount=intent.budget_amount,
+        budget_unit=intent.budget_unit.value if intent.budget_unit else None,
+        duration_minutes=intent.duration_minutes,
+        limit_per_provider=5,
+    )
     return state
 
 

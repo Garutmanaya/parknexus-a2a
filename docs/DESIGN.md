@@ -1,81 +1,116 @@
 # ParkNexus A2A Design Document
 
-## Purpose
+## Requirements
 
-ParkNexus A2A is a production-oriented multi-agent parking reservation platform. It demonstrates provider-owned databases, A2A Agent Cards, secure signed agent-to-agent calls, natural-language Host Agent orchestration, and a visual parking console.
+ParkNexus A2A is a multi-agent parking reservation platform with these requirements:
 
-## Core Requirements
-
-1. Each parking provider runs independently from configuration.
-2. Each provider owns its own PostgreSQL database, user, and credentials.
-3. Provider agents expose A2A discovery and task endpoints.
+1. A user interacts only with the Host Agent/UI.
+2. Parking providers are independent agents with their own databases and schemas.
+3. Provider agents publish Agent Cards containing capabilities, skills, and input schema contracts.
 4. Registry Agent discovers and persists provider Agent Cards.
-5. Host Agent accepts natural language, parses structured intent with an LLM, discovers providers, calls providers over secure A2A, ranks results, and manages hold/confirm/cancel/release workflows.
-6. All local agent endpoints run over HTTPS.
-7. A2A calls require bearer token plus HMAC signature headers.
-8. File-based logging records API calls, A2A calls, security checks, searches, holds, confirmations, cancellations, and errors.
-9. Visual UI shows garage levels, rows, slot status, pricing, and booking actions.
+5. Host Agent parses natural language, discovers providers, maps canonical intent into provider-specific schemas, validates payloads, and calls providers over signed A2A.
+6. Search is parallel across providers but returns a synchronous aggregated response to the UI.
+7. User accounts and user-facing booking transactions are persisted in the platform database.
+8. Provider databases remain isolated and own slot/reservation state.
+9. UI communicates only with Host Agent.
+10. All local services run over HTTPS and A2A calls require bearer token plus HMAC signature.
 
-## Runtime Components
+## Runtime Architecture
 
 ```text
 React UI
-  ↓ HTTPS REST
+  ↓ REST/HTTPS
 Host Agent
-  ↓ signed A2A
+  ├─ Admin/user APIs
+  ├─ Transaction history APIs
+  ├─ LangGraph workflow
+  ├─ Provider schema mapping/validation
+  └─ signed A2A client
+      ↓
 Registry Agent
-  ↓ HTTPS Agent Card fetch
+  └─ registered provider Agent Cards
+      ↓
 Provider Agents
-  ↓
-Provider-owned PostgreSQL databases
+  └─ provider-owned PostgreSQL databases
 ```
 
-## Provider Agent
+## Platform Database
 
-The provider runtime is generic. A provider is created by `agent.yaml` and `a2a.yaml`.
+The platform database stores:
 
-Responsibilities:
+- registered provider Agent Cards
+- user accounts
+- user-facing transaction history
 
-- bootstrap provider DB/user
-- create ORM tables
-- seed garage layout
-- expose Agent Card
-- search slots
-- calculate pricing
-- hold slot
-- confirm reservation
-- cancel hold
-- release slot
-- return garage layout for UI
+Tables:
 
-## Registry Agent
+```text
+registered_agents
+user_accounts
+user_transactions
+```
 
-The Registry Agent stores provider Agent Cards in the platform DB.
+## Provider Database
 
-Responsibilities:
+Each provider database stores:
 
-- register provider base URLs
-- fetch provider Agent Cards
-- validate capabilities and skills
-- discover providers by skill/tag/capability
-- expose A2A methods: `register_agent`, `discover_agents`, `list_agents`
+- provider metadata
+- garage inventory
+- parking slots
+- slot holds
+- reservations
+- slot events
 
-## Host Agent
+Provider state is never directly read by Host or UI.
 
-The Host Agent is the AI-facing layer.
+## Agent Card Schema Negotiation
 
-Responsibilities:
+Provider skills include input schemas:
 
-- parse natural language into `ParkingIntent`
-- discover matching providers through Registry A2A
-- call provider A2A endpoints
-- rank results by price/distance
-- orchestrate hold/confirm/cancel/release
-- expose visual-console support APIs
+```json
+{
+  "id": "search_slots",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "level_name": {"type": ["string", "null"], "x-canonical": "level_name"},
+      "ev_charger": {"type": ["boolean", "null"], "x-canonical": "ev_charger"},
+      "budget_amount": {"type": ["number", "string", "null"], "x-canonical": "budget_amount"}
+    }
+  }
+}
+```
+
+The Host Agent keeps a canonical intent model, maps it into each provider schema, validates the outgoing payload, then calls the provider through A2A.
+
+## Host Agent Workflow
+
+```text
+parse intent
+  ↓
+discover providers
+  ↓
+parallel provider search
+  ↓
+rank slots
+  ↓
+return response
+```
+
+Booking operations:
+
+```text
+hold_slot
+confirm_reservation
+cancel_hold
+release_slot
+```
+
+Every successful hold/reservation/cancellation is persisted as a user transaction in the platform DB.
 
 ## Security
 
-A2A requests use:
+A2A requests require:
 
 ```text
 Authorization: Bearer <token>
@@ -85,67 +120,19 @@ X-Timestamp: <unix_timestamp>
 X-Signature: <hmac_sha256>
 ```
 
-Signature payload:
+The request signature covers:
 
 ```text
-agent_id.request_id.timestamp.<raw_body>
+agent_id + request_id + timestamp + body
 ```
 
-Local TLS uses self-signed certs. Cloud should use ALB/API Gateway TLS and Secrets Manager.
+Local HTTPS uses self-signed certificates. Production should use managed certificates and optionally mTLS at the load balancer/service mesh layer.
 
-## Pricing Model
+## UI Design
 
-Provider owns pricing. Host sends semantic budget information; provider calculates whether a slot matches.
+The UI is chat-first:
 
-Provider fields:
+- left side: chat, history, admin panel
+- right side: provider summaries, recommendations, selected slot action panel, visual garage layout
 
-- hourly_rate
-- daily_rate
-- monthly_rate
-
-Search inputs:
-
-- budget_amount
-- budget_unit: hour, day, month, total
-- duration_minutes
-
-Provider response includes:
-
-- estimated_price
-- estimated_price_unit
-
-## Visual Console
-
-The UI calls Host Agent APIs:
-
-- `/parking/chat`
-- `/garage/layout`
-- `/parking/hold`
-- `/parking/confirm`
-- `/parking/hold/cancel`
-- `/parking/release`
-
-Slot statuses:
-
-- AVAILABLE
-- HELD
-- RESERVED
-- OCCUPIED
-- BLOCKED
-- MAINTENANCE
-
-## Deployment Notes
-
-Local:
-
-- Docker Compose for PostgreSQL
-- Python services for Provider A/B, Registry, Host
-- Vite React UI
-
-Cloud:
-
-- ECS Fargate or EKS
-- RDS PostgreSQL
-- ALB HTTPS
-- Secrets Manager
-- CloudWatch logs
+The UI never calls Provider Agent directly.

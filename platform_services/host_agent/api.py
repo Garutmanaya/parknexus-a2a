@@ -2,33 +2,32 @@
 
 from fastapi import APIRouter, HTTPException
 
-from platform_services.host_agent import service
+from platform_services.host_agent import service, transaction_service, user_service
 from platform_services.host_agent.graph import run_host_agent
 from platform_services.host_agent.schemas import (
+    AdminLoginRequest,
+    AdminLoginResponse,
+    AgentsResponse,
     CancelHoldRequest,
     ChatParkingRequest,
     ConfirmParkingRequest,
-    FindParkingRequest,
-    FindParkingResponse,
-    GarageLayoutRequest,
-    HoldParkingRequest,
-    ReleaseSlotRequest,
-)
-from shared.logging.logger import get_logger
-
-from platform_services.host_agent.schemas import (
-    CancelHoldRequest,
-    ChatParkingRequest,
-    ConfirmParkingRequest,
+    CreateUserRequest,
     FindParkingRequest,
     FindParkingResponse,
     GarageLayoutByProviderRequest,
-    GarageLayoutRequest,
     HoldParkingRequest,
     ProvidersResponse,
     ProviderSummary,
     ReleaseSlotRequest,
+    TransactionsResponse,
+    UpdateUserRequest,
+    UserLoginRequest,
+    UserLoginResponse,
+    UserResponse,
+    UsersResponse,
+    UserStatusRequest,
 )
+from shared.logging.logger import get_logger
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -38,18 +37,86 @@ router = APIRouter()
 def health() -> dict:
     return {"status": "healthy", "service": "host_agent"}
 
+
+
+
+@router.post("/user/login", response_model=UserLoginResponse)
+def user_login(request: UserLoginRequest):
+    logger.info("user_login_request_received user_id=%s", request.user_id)
+    try:
+        user = user_service.validate_user_login(request.user_id, request.password)
+        return UserLoginResponse(authenticated=True, user=user, message="OK")
+    except Exception as exc:
+        logger.info("user_login_request_failed user_id=%s", request.user_id)
+        return UserLoginResponse(authenticated=False, user=None, message=str(exc))
+
+
+@router.post("/admin/login", response_model=AdminLoginResponse)
+def admin_login(request: AdminLoginRequest):
+    logger.info("admin_login_request_received username=%s", request.username)
+    ok = user_service.validate_admin_login(request.username, request.password)
+    return AdminLoginResponse(authenticated=ok, message="OK" if ok else "Invalid credentials")
+
+
+@router.get("/admin/users", response_model=UsersResponse)
+def admin_list_users():
+    logger.info("admin_list_users_request_received")
+    users = [UserResponse(**user) for user in user_service.list_users()]
+    return UsersResponse(count=len(users), users=users)
+
+
+@router.post("/admin/users", response_model=UserResponse)
+def admin_create_user(request: CreateUserRequest):
+    logger.info("admin_create_user_request_received user_id=%s email=%s", request.user_id, request.email)
+    try:
+        return UserResponse(**user_service.create_user(**request.model_dump()))
+    except Exception as exc:
+        logger.error("admin_create_user_request_failed", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.put("/admin/users", response_model=UserResponse)
+def admin_update_user(request: UpdateUserRequest):
+    logger.info("admin_update_user_request_received user_id=%s", request.user_id)
+    try:
+        return UserResponse(**user_service.update_user(**request.model_dump(exclude_unset=True)))
+    except Exception as exc:
+        logger.error("admin_update_user_request_failed", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.delete("/admin/users/{user_id}")
+def admin_delete_user(user_id: str):
+    logger.info("admin_delete_user_request_received user_id=%s", user_id)
+    try:
+        return user_service.delete_user(user_id)
+    except Exception as exc:
+        logger.error("admin_delete_user_request_failed", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.post("/admin/users/status", response_model=UserResponse)
+def admin_set_user_status(request: UserStatusRequest):
+    logger.info("admin_set_user_status_request_received user_id=%s is_active=%s", request.user_id, request.is_active)
+    try:
+        return UserResponse(**user_service.set_user_active(request.user_id, request.is_active))
+    except Exception as exc:
+        logger.error("admin_set_user_status_request_failed", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.get("/transactions", response_model=TransactionsResponse)
+def list_transactions(user_id: str | None = None, limit: int = 25):
+    logger.info("transactions_request_received user_id=%s limit=%s", user_id, limit)
+    transactions = transaction_service.list_transactions(user_id=user_id, limit=limit)
+    return TransactionsResponse(count=len(transactions), transactions=transactions)
+
+
 @router.get("/providers", response_model=ProvidersResponse)
 def list_providers():
-    """
-    List providers through Host Agent.
-
-    UI must call this endpoint instead of talking to Registry or Provider directly.
-    """
     logger.info("providers_request_received")
-
     try:
         providers = service.list_providers()
-
         result = [
             ProviderSummary(
                 name=provider["name"],
@@ -61,14 +128,23 @@ def list_providers():
             )
             for provider in providers
         ]
-
         logger.info("providers_request_completed count=%s", len(result))
-
         return ProvidersResponse(count=len(result), providers=result)
-
     except Exception as exc:
         logger.error("providers_request_failed", exc_info=True)
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.get("/admin/agents", response_model=AgentsResponse)
+def admin_list_agents():
+    logger.info("admin_list_agents_request_received")
+    try:
+        agents = service.list_providers()
+        return AgentsResponse(count=len(agents), agents=agents)
+    except Exception as exc:
+        logger.error("admin_list_agents_request_failed", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
 
 @router.post("/parking/find", response_model=FindParkingResponse)
 def find_parking(request: FindParkingRequest):
@@ -96,24 +172,14 @@ def chat_parking(request: ChatParkingRequest):
 
 @router.post("/garage/layout")
 def garage_layout(request: GarageLayoutByProviderRequest):
-    """
-    Return garage layout by provider agent name.
-
-    Browser sends provider_agent only.
-    Host resolves provider URL internally through Registry.
-    """
-    logger.info(
-        "garage_layout_request_received provider_agent=%s",
-        request.provider_agent,
-    )
+    logger.info("garage_layout_request_received provider_agent=%s", request.provider_agent)
     logger.debug("garage_layout_request_payload=%s", request.model_dump())
-
     try:
         return service.get_garage_layout_by_provider_agent(request.provider_agent)
-
     except Exception as exc:
         logger.error("garage_layout_request_failed", exc_info=True)
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
 
 @router.post("/parking/hold")
 def hold_parking(request: HoldParkingRequest):

@@ -26,12 +26,22 @@ def build_skill(skill_config: dict[str, Any]) -> dict[str, Any]:
     """
     Build one A2A skill entry from a2a.yaml.
     """
-    return {
+    skill = {
         "id": skill_config["id"],
         "name": skill_config["name"],
         "description": skill_config.get("description", ""),
         "tags": skill_config.get("tags", []),
     }
+
+    # Provider-specific schema contracts are advertised in the Agent Card.
+    # Host Agent uses these schemas to validate/marshal provider-specific payloads
+    # before sending A2A requests.
+    if "input_schema" in skill_config:
+        skill["input_schema"] = skill_config["input_schema"]
+    if "output_schema" in skill_config:
+        skill["output_schema"] = skill_config["output_schema"]
+
+    return skill
 
 
 def build_agent_card(

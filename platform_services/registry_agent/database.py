@@ -24,6 +24,9 @@ from agent_runtime.bootstrap import (
     grant_schema_privileges,
 )
 import platform_services.registry_agent.models  # noqa: F401
+from shared.logging.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 def required_env(name: str) -> str:
@@ -82,7 +85,7 @@ def bootstrap_platform_database() -> None:
         db_password=config["db_password"],
     )
 
-    print("Platform database bootstrap completed")
+    logger.info("platform_database_bootstrap_completed")
 
 
 def create_platform_engine():
@@ -107,12 +110,31 @@ PlatformSessionLocal = sessionmaker(
 
 def create_platform_tables() -> None:
     """
-    Create platform database tables.
+    Create platform database tables and apply safe local-dev additive upgrades.
+
+    SQLAlchemy create_all() does not alter existing tables. These ALTER statements
+    keep the project convenient while the schema is still evolving locally.
+    Production should use Alembic migrations instead.
     """
     import platform_services.registry_agent.models  # noqa: F401
 
     PlatformBase.metadata.create_all(bind=platform_engine)
-    print("Platform tables created successfully")
+    apply_local_schema_upgrades()
+    logger.info("platform_tables_created_successfully")
+
+
+def apply_local_schema_upgrades() -> None:
+    """Apply additive schema changes for local development."""
+    statements = [
+        "ALTER TABLE IF EXISTS user_accounts ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255) DEFAULT '' NOT NULL",
+        "ALTER TABLE IF EXISTS user_accounts ADD COLUMN IF NOT EXISTS first_name VARCHAR(100)",
+        "ALTER TABLE IF EXISTS user_accounts ADD COLUMN IF NOT EXISTS last_name VARCHAR(100)",
+        "ALTER TABLE IF EXISTS user_accounts ADD COLUMN IF NOT EXISTS phone_number VARCHAR(50)",
+        "ALTER TABLE IF EXISTS user_accounts ADD COLUMN IF NOT EXISTS address TEXT",
+    ]
+    with platform_engine.begin() as conn:
+        for statement in statements:
+            conn.execute(text(statement))
 
 
 def get_platform_db() -> Generator[Session, None, None]:

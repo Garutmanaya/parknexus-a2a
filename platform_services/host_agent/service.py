@@ -5,6 +5,8 @@ from decimal import Decimal
 
 from shared.config.runtime import get_httpx_verify_tls, get_registry_agent_base_url
 from platform_services.host_agent.schemas import ProviderSlotResult
+from platform_services.host_agent.schema_mapper import build_provider_payload
+from platform_services.host_agent import notification_service, transaction_service
 from shared.security.a2a_client import post_a2a
 from shared.logging.logger import get_logger
 
@@ -102,15 +104,18 @@ def call_provider_search(
     duration_minutes: int | None = None,
     limit: int = 5,
 ) -> list[ProviderSlotResult]:
-    params = {"level_name": level_name, "ev_charger": ev_charger, "handicap": handicap, "limit": limit}
-    if max_hourly_rate is not None:
-        params["max_hourly_rate"] = str(max_hourly_rate)
-    if budget_amount is not None:
-        params["budget_amount"] = str(budget_amount)
-    if budget_unit:
-        params["budget_unit"] = budget_unit
-    if duration_minutes:
-        params["duration_minutes"] = duration_minutes
+    canonical_params = {
+        "level_name": level_name,
+        "slot_type": None,
+        "ev_charger": ev_charger,
+        "handicap": handicap,
+        "max_hourly_rate": str(max_hourly_rate) if max_hourly_rate is not None else None,
+        "budget_amount": str(budget_amount) if budget_amount is not None else None,
+        "budget_unit": budget_unit,
+        "duration_minutes": duration_minutes,
+        "limit": limit,
+    }
+    params = build_provider_payload(provider, "search_slots", canonical_params)
     payload = {"jsonrpc": "2.0", "id": request_id, "method": "search_slots", "params": params}
     logger.info("provider_search_started provider=%s url=%s", provider.get("name"), provider.get("url"))
     logger.debug("provider_search_payload=%s", payload)
@@ -152,9 +157,29 @@ def find_parking(
     providers = discover_search_agents()
     all_slots: list[ProviderSlotResult] = []
     with ThreadPoolExecutor(max_workers=max(1, len(providers))) as executor:
-        futures = [executor.submit(call_provider_search, provider, f"host-search-{provider['name']}", level_name, ev_charger, handicap, max_hourly_rate, budget_amount, budget_unit, duration_minutes, limit_per_provider) for provider in providers]
+        futures = {
+            executor.submit(
+                call_provider_search,
+                provider,
+                f"host-search-{provider['name']}",
+                level_name,
+                ev_charger,
+                handicap,
+                max_hourly_rate,
+                budget_amount,
+                budget_unit,
+                duration_minutes,
+                limit_per_provider,
+            ): provider
+            for provider in providers
+        }
         for future in as_completed(futures):
-            all_slots.extend(future.result())
+            provider = futures[future]
+            try:
+                all_slots.extend(future.result())
+            except Exception:
+                # Keep synchronous aggregate response usable even if one provider fails.
+                logger.error("provider_search_failed provider=%s", provider.get("name"), exc_info=True)
     return sorted(all_slots, key=lambda slot: (slot.estimated_price if slot.estimated_price is not None else slot.hourly_rate or Decimal("999999"), slot.distance_to_entrance_meters))
 
 
@@ -174,8 +199,19 @@ def hold_parking_slot(provider_url: str, slot_code: str, user_id: str, hold_minu
     response = post_a2a(url=f"{provider_url.rstrip('/')}/a2a", payload=payload, verify_tls=get_httpx_verify_tls())
     if response.get("error"):
         raise RuntimeError(response["error"]["message"])
-    logger.info("provider_hold_completed slot_code=%s hold_id=%s", slot_code, response["result"].get("hold_id"))
-    return response["result"]
+    result = response["result"]
+    logger.info("provider_hold_completed slot_code=%s hold_id=%s", slot_code, result.get("hold_id"))
+    tx = transaction_service.record_transaction(
+        user_id=user_id,
+        transaction_type="HOLD",
+        status="HELD",
+        provider_url=provider_url,
+        slot_code=slot_code,
+        hold_id=result.get("hold_id"),
+        details=result,
+    )
+    notification_service.send_booking_alert(user_id, "HOLD_CREATED", {**result, **tx})
+    return result
 
 
 def confirm_parking_reservation(provider_url: str, hold_id: str, user_id: str, reserved_minutes: int = 60) -> dict:
@@ -185,8 +221,21 @@ def confirm_parking_reservation(provider_url: str, hold_id: str, user_id: str, r
     response = post_a2a(url=f"{provider_url.rstrip('/')}/a2a", payload=payload, verify_tls=get_httpx_verify_tls())
     if response.get("error"):
         raise RuntimeError(response["error"]["message"])
-    logger.info("provider_confirm_completed hold_id=%s reservation_id=%s", hold_id, response["result"].get("reservation_id"))
-    return response["result"]
+    result = response["result"]
+    logger.info("provider_confirm_completed hold_id=%s reservation_id=%s", hold_id, result.get("reservation_id"))
+    transaction_service.update_transaction_status_by_hold(hold_id, "CONFIRMED", result)
+    tx = transaction_service.record_transaction(
+        user_id=user_id,
+        transaction_type="RESERVATION",
+        status="RESERVED",
+        provider_url=provider_url,
+        slot_code=result.get("slot_code"),
+        hold_id=hold_id,
+        reservation_id=result.get("reservation_id"),
+        details=result,
+    )
+    notification_service.send_booking_alert(user_id, "RESERVATION_CONFIRMED", {**result, **tx, "reserved_minutes": reserved_minutes})
+    return result
 
 
 def cancel_parking_hold(provider_url: str, hold_id: str, user_id: str) -> dict:
@@ -195,7 +244,10 @@ def cancel_parking_hold(provider_url: str, hold_id: str, user_id: str) -> dict:
     response = post_a2a(url=f"{provider_url.rstrip('/')}/a2a", payload=payload, verify_tls=get_httpx_verify_tls())
     if response.get("error"):
         raise RuntimeError(response["error"]["message"])
-    return response["result"]
+    result = response["result"]
+    transaction_service.update_transaction_status_by_hold(hold_id, "CANCELLED", result)
+    notification_service.send_booking_alert(user_id, "HOLD_CANCELLED", {**result, "provider_url": provider_url, "hold_id": hold_id})
+    return result
 
 
 def release_parking_slot(provider_url: str, slot_code: str, user_id: str, reason: str | None = None) -> dict:
@@ -204,4 +256,7 @@ def release_parking_slot(provider_url: str, slot_code: str, user_id: str, reason
     response = post_a2a(url=f"{provider_url.rstrip('/')}/a2a", payload=payload, verify_tls=get_httpx_verify_tls())
     if response.get("error"):
         raise RuntimeError(response["error"]["message"])
-    return response["result"]
+    result = response["result"]
+    transaction_service.update_transaction_status_by_slot(provider_url, slot_code, "RELEASED", result)
+    notification_service.send_booking_alert(user_id, "SLOT_RELEASED", {**result, "provider_url": provider_url, "slot_code": slot_code})
+    return result
