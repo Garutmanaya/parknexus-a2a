@@ -49,3 +49,12 @@ skills:
     tags:
       - parking
       - release
+
+
+  - id: get_garage_layout
+    name: Get Garage Layout
+    description: Return visual garage layout including levels, rows, slots, statuses, and pricing.
+    tags:
+      - parking
+      - layout
+      - ui

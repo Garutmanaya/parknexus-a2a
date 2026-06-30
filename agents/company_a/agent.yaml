@@ -34,7 +34,7 @@ layout:
           columns: 15
 
 pricing:
-  default_price_per_hour: 10.00
+  default_hourly_rate: 10.00
   default_daily_rate: 30.00
   default_monthly_rate: 250.00
   by_level:
