@@ -9,8 +9,7 @@ RUN npm run build
 FROM python:3.12-slim AS runtime
 
 ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    POSTGRES_ADMIN_PASSWORD=demo_postgres_password
+    PYTHONDONTWRITEBYTECODE=1 
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -29,8 +28,22 @@ COPY docs ./docs
 COPY .env.demo ./
 COPY docker ./docker
 
+ENV PYTHONPATH=/app
+
 RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir -e .
+    && pip install --no-cache-dir \
+        fastapi \
+        uvicorn[standard] \
+        sqlalchemy \
+        psycopg[binary] \
+        python-dotenv \
+        pyyaml \
+        httpx \
+        sse-starlette \
+        openai \
+        langgraph \
+        langchain-core \
+        pydantic
 
 COPY --from=ui_builder /ui/dist /usr/share/nginx/html
 COPY docker/nginx.conf /etc/nginx/nginx.conf
@@ -39,6 +52,11 @@ COPY docker/supervisord.conf /etc/supervisor/conf.d/parknexus.conf
 RUN chmod +x /app/docker/*.sh /app/scripts/*.sh || true \
     && mkdir -p /app/logs /app/certs /var/lib/postgresql/data \
     && chown -R postgres:postgres /var/lib/postgresql
+
+RUN chmod +x /app/docker/entrypoint-demo.sh \
+    && chmod +x /app/docker/register_providers.sh \
+    && chmod +x /app/docker/start-postgres.sh \
+    && sed -i 's/\r$//' /app/docker/*.sh
 
 EXPOSE 8080 8030 8020 8011 8012
 
