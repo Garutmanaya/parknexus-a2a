@@ -1,0 +1,45 @@
+FROM node:20-bookworm-slim AS ui_builder
+WORKDIR /ui
+COPY ui/package*.json ./
+RUN npm install
+COPY ui/ ./
+ENV VITE_HOST_AGENT_URL=/api
+RUN npm run build
+
+FROM python:3.12-slim AS runtime
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    POSTGRES_ADMIN_PASSWORD=demo_postgres_password
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+       postgresql postgresql-contrib nginx supervisor curl openssl procps ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY pyproject.toml README.md LICENSE ./
+COPY agent_runtime ./agent_runtime
+COPY platform_services ./platform_services
+COPY shared ./shared
+COPY agents ./agents
+COPY scripts ./scripts
+COPY docs ./docs
+COPY .env.demo ./
+COPY docker ./docker
+
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -e .
+
+COPY --from=ui_builder /ui/dist /usr/share/nginx/html
+COPY docker/nginx.conf /etc/nginx/nginx.conf
+COPY docker/supervisord.conf /etc/supervisor/conf.d/parknexus.conf
+
+RUN chmod +x /app/docker/*.sh /app/scripts/*.sh || true \
+    && mkdir -p /app/logs /app/certs /var/lib/postgresql/data \
+    && chown -R postgres:postgres /var/lib/postgresql
+
+EXPOSE 8080 8030 8020 8011 8012
+
+ENTRYPOINT ["/app/docker/entrypoint-demo.sh"]
