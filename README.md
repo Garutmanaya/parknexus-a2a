@@ -120,3 +120,62 @@ LOG_LEVEL=INFO
 - Provider Agent Cards publish skill schemas used by the Host Agent for provider-specific payload validation.
 - Platform DB stores user accounts and user-facing transactions.
 - Provider DBs store actual slot/reservation state.
+
+## Demo all-in-one Docker image
+
+This project includes a demo-only Docker image that runs PostgreSQL, Provider A, Provider B, Registry, Host Agent, and the React UI in one container.
+
+This is intended for demos only. PostgreSQL data is ephemeral and is initialized on container startup.
+
+Build:
+
+```bash
+./scripts/build_demo_image.sh
+```
+
+Run locally:
+
+```bash
+# Optional: pass OPENAI_API_KEY for Host Agent intent parsing
+export OPENAI_API_KEY=your_key_here
+./scripts/run_demo_local.sh
+```
+
+Open the UI:
+
+```text
+http://localhost:8080
+```
+
+Default demo credentials:
+
+```text
+Admin: admin / admin123
+User:  demo / demo123
+```
+
+Smoke test:
+
+```bash
+./scripts/test_demo_container.sh
+```
+
+Useful logs:
+
+```bash
+docker exec -it parknexus-a2a-demo bash
+ls -l /app/logs
+tail -f /app/logs/host.stdout.log
+```
+
+Exposed demo ports:
+
+```text
+8080  UI through Nginx
+8030  Host Agent HTTPS
+8020  Registry Agent HTTPS
+8011  Provider A HTTPS
+8012  Provider B HTTPS
+```
+
+For cloud demo deployment, expose only port `8080` publicly and keep the agent ports private when possible.

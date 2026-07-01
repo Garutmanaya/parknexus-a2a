@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 
-const HOST_URL = import.meta.env.VITE_HOST_AGENT_URL || "https://localhost:8030";
+const HOST_URL = import.meta.env.VITE_HOST_AGENT_URL || (import.meta.env.PROD ? "/api" : "https://localhost:8030");
 
 async function apiGet(path) {
   const response = await fetch(`${HOST_URL}${path}`, { method: "GET" });
