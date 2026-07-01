@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, HTTPException
 
-from platform_services.host_agent import service, transaction_service, user_service
+from platform_services.host_agent import service, system_health, transaction_service, user_service
 from platform_services.host_agent.graph import run_host_agent
 from platform_services.host_agent.schemas import (
     AdminLoginRequest,
@@ -38,6 +38,15 @@ def health() -> dict:
     return {"status": "healthy", "service": "host_agent"}
 
 
+@router.get("/system/status")
+def system_status():
+    """Return environment health for admin dashboard."""
+    logger.info("system_status_request_received")
+    try:
+        return system_health.get_system_status()
+    except Exception as exc:
+        logger.error("system_status_request_failed", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.post("/user/login", response_model=UserLoginResponse)

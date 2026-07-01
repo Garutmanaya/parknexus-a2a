@@ -9,7 +9,8 @@ RUN npm run build
 FROM python:3.12-slim AS runtime
 
 ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/app
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -18,17 +19,15 @@ RUN apt-get update \
 
 WORKDIR /app
 
-COPY pyproject.toml README.md LICENSE ./
+COPY README.md LICENSE ./
 COPY agent_runtime ./agent_runtime
 COPY platform_services ./platform_services
 COPY shared ./shared
 COPY agents ./agents
 COPY scripts ./scripts
 COPY docs ./docs
-COPY .env.demo ./
 COPY docker ./docker
-
-ENV PYTHONPATH=/app
+COPY .env.demo.example ./
 
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir \
@@ -49,14 +48,10 @@ COPY --from=ui_builder /ui/dist /usr/share/nginx/html
 COPY docker/nginx.conf /etc/nginx/nginx.conf
 COPY docker/supervisord.conf /etc/supervisor/conf.d/parknexus.conf
 
-RUN chmod +x /app/docker/*.sh /app/scripts/*.sh || true \
+RUN sed -i 's/\r$//' /app/docker/*.sh /app/scripts/*.sh \
+    && chmod +x /app/docker/*.sh /app/scripts/*.sh || true \
     && mkdir -p /app/logs /app/certs /var/lib/postgresql/data \
     && chown -R postgres:postgres /var/lib/postgresql
-
-RUN chmod +x /app/docker/entrypoint-demo.sh \
-    && chmod +x /app/docker/register_providers.sh \
-    && chmod +x /app/docker/start-postgres.sh \
-    && sed -i 's/\r$//' /app/docker/*.sh
 
 EXPOSE 8080 8030 8020 8011 8012
 

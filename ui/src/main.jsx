@@ -119,6 +119,13 @@ function AdminPortal({ admin, onLogout }) {
     address: "",
   });
   const [status, setStatus] = useState("Ready");
+  const [health, setHealth] = useState(null);
+
+  async function loadSystemHealth() {
+    const result = await apiGet("/system/status");
+    setHealth(result);
+    setStatus(`Environment health: ${result.status} (${result.healthy_count}/${result.total_count})`);
+  }
 
   async function loadUsers() {
     const result = await apiGet("/admin/users");
@@ -151,6 +158,7 @@ function AdminPortal({ admin, onLogout }) {
   useEffect(() => {
     loadUsers().catch((e) => setStatus(`User load failed: ${e.message}`));
     loadAgents().catch((e) => setStatus(`Agent load failed: ${e.message}`));
+    loadSystemHealth().catch((e) => setStatus(`Health check failed: ${e.message}`));
   }, []);
 
   return (
@@ -160,6 +168,37 @@ function AdminPortal({ admin, onLogout }) {
         <button onClick={onLogout}>Logout</button>
       </header>
       <main className="adminGrid">
+        <section className="card wideAdmin">
+          <div className="sectionHeader">
+            <div>
+              <h2>Environment Health</h2>
+              <p className="muted">Single-container demo runtime status</p>
+            </div>
+            <button className="smallBtn" onClick={loadSystemHealth}>Refresh Health</button>
+          </div>
+          {health ? (
+            <div>
+              <div className={health.status === "healthy" ? "healthBanner healthy" : "healthBanner degraded"}>
+                {health.status.toUpperCase()} • {health.healthy_count}/{health.total_count} components healthy
+              </div>
+              <div className="healthGrid">
+                {(health.components || []).map((component) => (
+                  <div key={component.name} className={component.status === "healthy" ? "healthCard healthy" : "healthCard unhealthy"}>
+                    <div className="healthIcon">{component.status === "healthy" ? "●" : "●"}</div>
+                    <div>
+                      <b>{component.name}</b>
+                      <span>{component.type} • {component.latency_ms}ms</span>
+                      <small>{component.detail}</small>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <p className="muted">Health status not loaded yet.</p>
+          )}
+        </section>
+
         <section className="card">
           <h2>Create / Update User</h2>
           <div className="formGrid">

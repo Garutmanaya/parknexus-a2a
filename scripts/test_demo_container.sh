@@ -15,6 +15,9 @@ curl -kfsS "$BASE_B/health"; echo
 curl -kfsS "$BASE_REGISTRY/health"; echo
 curl -kfsS "$BASE_HOST/health"; echo
 
+echo "System status"
+curl -kfsS "$BASE_HOST/system/status"; echo
+
 echo "Providers"
 curl -kfsS "$BASE_HOST/providers"; echo
 

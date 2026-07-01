@@ -179,3 +179,40 @@ Exposed demo ports:
 ```
 
 For cloud demo deployment, expose only port `8080` publicly and keep the agent ports private when possible.
+
+## Demo all-in-one Docker deployment
+
+This demo image runs PostgreSQL, Provider A, Provider B, Registry Agent, Host Agent, and the React UI in one container. PostgreSQL is ephemeral and reinitialized when the container filesystem is recreated.
+
+Create a local runtime env file from the example:
+
+```bash
+cp .env.demo.example .env.demo
+```
+
+Do not put sensitive secrets in the image. Pass runtime secrets through the env file or shell environment. For OpenAI, prefer:
+
+```bash
+export OPENAI_API_KEY=your_key_here
+```
+
+Build and run:
+
+```bash
+./scripts/build_demo_image.sh
+./scripts/run_demo_local.sh
+```
+
+Open the UI:
+
+```text
+http://localhost:8080
+```
+
+Admin login defaults are configured in `.env.demo`. Demo user is auto-created by `docker/register_providers.sh`.
+
+Health dashboard:
+
+```bash
+curl -k https://localhost:8030/system/status
+```
